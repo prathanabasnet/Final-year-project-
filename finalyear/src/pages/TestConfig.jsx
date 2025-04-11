@@ -1,380 +1,603 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import styled from "styled-components";
 
-// Navbar Component
-const Navbar = () => {
-  return (
-    <nav style={{ 
-      backgroundColor: '#161b22', 
-      padding: '10px 20px', 
-      color: 'white', 
-      display: 'flex', 
-      justifyContent: 'space-between', 
-      alignItems: 'center' 
-    }}>
-      <div style={{ fontSize: '18px', fontWeight: 'bold' }}>SecureAPI</div>
-      <div style={{ display: 'flex', gap: '20px' }}>
-        <a href="/dashboard" style={{ color: 'white', textDecoration: 'none', fontWeight: '500' }}>Dashboard</a>
-        <a href="/test-config" style={{ color: 'white', textDecoration: 'none', fontWeight: '500' }}>Test</a>
-        <a href="/" style={{ color: 'white', textDecoration: 'none', fontWeight: '500' }}>Logout</a>
-      </div>
-    </nav>
-  );
-};
+// Styled components
+const Container = styled.div`
+  min-height: 100vh;
+  background-color: #0d1117;
+  color: white;
+`;
 
-// Main Component
+const FormContainer = styled.div`
+  max-width: 800px;
+  margin: 20px auto;
+  background-color: #161b22;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+`;
+
+const Input = styled.input`
+  width: 100%;
+  padding: 10px;
+  margin-top: 8px;
+  border-radius: 4px;
+  border: 1px solid #30363d;
+  background-color: #0d1117;
+  color: #c9d1d9;
+  &:focus {
+    outline: none;
+    border-color: #58a6ff;
+  }
+`;
+
+const TextArea = styled.textarea`
+  width: 100%;
+  padding: 10px;
+  margin-top: 8px;
+  border-radius: 4px;
+  border: 1px solid #30363d;
+  background-color: #0d1117;
+  color: #c9d1d9;
+  min-height: 100px;
+  font-family: monospace;
+  &:focus {
+    outline: none;
+    border-color: #58a6ff;
+  }
+`;
+
+const StyledSelect = styled.select`
+  width: 100%;
+  padding: 10px;
+  margin-top: 8px;
+  border-radius: 4px;
+  border: 1px solid #30363d;
+  background-color: #0d1117;
+  color: #c9d1d9;
+  &:focus {
+    outline: none;
+    border-color: #58a6ff;
+  }
+`;
+
+const Button = styled.button`
+  padding: 10px 20px;
+  border-radius: 4px;
+  background-color: ${(props) =>
+    props.variant === "danger"
+      ? "#ff4444"
+      : props.variant === "success"
+      ? "#238636"
+      : "#007BFF"};
+  color: white;
+  border: none;
+  cursor: pointer;
+  margin-right: 10px;
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`;
+
+const FieldContainer = styled.div`
+  margin-bottom: 20px;
+`;
+
+const FieldRow = styled.div`
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+`;
+
+const RemoveButton = styled.button`
+  background-color: #ff4444;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0 10px;
+  cursor: pointer;
+`;
+
 const TestConfig = () => {
-  // State management
-  const [apiType, setApiType] = useState('REST');
-  const [apiUrl, setApiUrl] = useState('');
-  const [httpMethod, setHttpMethod] = useState('GET');
-  const [headers, setHeaders] = useState([{ name: 'Content-Type', value: 'application/json' }]);
-  const [queryParams, setQueryParams] = useState([{ name: '', value: '' }]);
-  const [requestBody, setRequestBody] = useState('');
-  const [graphQLQuery, setGraphQLQuery] = useState('');
-  const [graphQLVariables, setGraphQLVariables] = useState('{}');
-  const [authMethod, setAuthMethod] = useState('None');
-  const [authToken, setAuthToken] = useState('');
+  const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    apiType: "REST",
+    apiUrl: "",
+    httpMethod: "GET",
+    headers: [{ name: "Content-Type", value: "application/json" }],
+    queryParams: [{ name: "", value: "" }],
+    requestBody: "",
+    graphQLQuery: "",
+    graphQLVariables: "{}",
+    authMethod: "None",
+    authToken: "",
+    selectedTests: ["sql", "xss", "ssrf"],
+  });
+  const [testResults, setTestResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const user = JSON.parse(localStorage.getItem("user")) || null;
 
-  // Handler functions
+  // Redirect if not authenticated
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    if (!token || !user) {
+      navigate("/");
+    }
+  }, [navigate, user]);
+
+  // Update Content-Type header based on API type
+  useEffect(() => {
+    if (formData.apiType === "SOAP") {
+      updateHeader("Content-Type", "text/xml");
+    } else if (formData.apiType === "GraphQL") {
+      updateHeader("Content-Type", "application/json");
+      setFormData((prev) => ({ ...prev, httpMethod: "POST" }));
+    } else {
+      updateHeader("Content-Type", "application/json");
+    }
+  }, [formData.apiType]);
+
+  const updateHeader = (name, value) => {
+    const headers = [...formData.headers];
+    const index = headers.findIndex((h) => h.name === name);
+    if (index >= 0) {
+      headers[index].value = value;
+    } else {
+      headers.push({ name, value });
+    }
+    setFormData((prev) => ({ ...prev, headers }));
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
   const handleHeaderChange = (index, field, value) => {
-    const updatedHeaders = [...headers];
-    updatedHeaders[index][field] = value;
-    setHeaders(updatedHeaders);
+    const headers = [...formData.headers];
+    headers[index][field] = value;
+    setFormData((prev) => ({ ...prev, headers }));
   };
 
   const handleAddHeader = () => {
-    setHeaders([...headers, { name: '', value: '' }]);
+    setFormData((prev) => ({
+      ...prev,
+      headers: [...prev.headers, { name: "", value: "" }],
+    }));
   };
 
   const handleRemoveHeader = (index) => {
-    const updatedHeaders = [...headers];
-    updatedHeaders.splice(index, 1);
-    setHeaders(updatedHeaders);
+    const headers = [...formData.headers];
+    headers.splice(index, 1);
+    setFormData((prev) => ({ ...prev, headers }));
   };
 
   const handleQueryParamChange = (index, field, value) => {
-    const updatedQueryParams = [...queryParams];
-    updatedQueryParams[index][field] = value;
-    setQueryParams(updatedQueryParams);
+    const queryParams = [...formData.queryParams];
+    queryParams[index][field] = value;
+    setFormData((prev) => ({ ...prev, queryParams }));
   };
 
   const handleAddQueryParam = () => {
-    setQueryParams([...queryParams, { name: '', value: '' }]);
+    setFormData((prev) => ({
+      ...prev,
+      queryParams: [...prev.queryParams, { name: "", value: "" }],
+    }));
   };
 
   const handleRemoveQueryParam = (index) => {
-    const updatedQueryParams = [...queryParams];
-    updatedQueryParams.splice(index, 1);
-    setQueryParams(updatedQueryParams);
+    const queryParams = [...formData.queryParams];
+    queryParams.splice(index, 1);
+    setFormData((prev) => ({ ...prev, queryParams }));
   };
 
-  // Effect hooks
-  useEffect(() => {
-    if (apiType === 'SOAP') {
-      setHeaders([{ name: 'Content-Type', value: 'text/xml' }]);
-    } else if (apiType === 'GraphQL') {
-      setHeaders([{ name: 'Content-Type', value: 'application/json' }]);
-      setHttpMethod('POST');
-    } else {
-      setHeaders([{ name: 'Content-Type', value: 'application/json' }]);
-    }
-  }, [apiType]);
-
-  useEffect(() => {
-    if (apiType === 'GraphQL') {
-      try {
-        setRequestBody(JSON.stringify({
-          query: graphQLQuery,
-          variables: JSON.parse(graphQLVariables || '{}')
-        }, null, 2));
-      } catch (e) {
-        console.error('Invalid GraphQL variables JSON');
+  const handleTestToggle = (test) => {
+    setFormData((prev) => {
+      const selectedTests = [...prev.selectedTests];
+      const index = selectedTests.indexOf(test);
+      if (index >= 0) {
+        selectedTests.splice(index, 1);
+      } else {
+        selectedTests.push(test);
       }
-    }
-  }, [graphQLQuery, graphQLVariables, apiType]);
+      return { ...prev, selectedTests };
+    });
+  };
 
-  // Form submission
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const formData = {
-      apiType,
-      apiUrl,
-      httpMethod,
-      headers: headers.filter(h => h.name && h.value),
-      queryParams: apiType !== 'GraphQL' ? queryParams.filter(p => p.name && p.value) : null,
-      requestBody: apiType === 'GraphQL' 
-        ? JSON.stringify({ 
-            query: graphQLQuery, 
-            variables: JSON.parse(graphQLVariables || '{}') 
-          })
-        : requestBody,
-      authMethod,
-      authToken
-    };
-    console.log('Form Data:', formData);
-    // Here you would typically send the data to your backend
+    setLoading(true);
+    setError("");
+
+    try {
+      const token = localStorage.getItem("access_token");
+      if (!token) {
+        throw new Error("Not authenticated");
+      }
+
+      // Prepare headers object
+      const headersObj = formData.headers
+        .filter((h) => h.name && h.value)
+        .reduce((acc, h) => ({ ...acc, [h.name]: h.value }), {});
+
+      // Add auth header if needed
+      if (formData.authMethod !== "None") {
+        if (formData.authMethod === "Bearer Token") {
+          headersObj["Authorization"] = `Bearer ${formData.authToken}`;
+        } else if (formData.authMethod === "API Key") {
+          headersObj["API-Key"] = formData.authToken;
+        }
+      }
+
+      // Prepare query params
+      const queryParamsObj = formData.queryParams
+        .filter((p) => p.name && p.value)
+        .reduce((acc, p) => ({ ...acc, [p.name]: p.value }), {});
+
+      // Prepare request body
+      let requestBody = formData.requestBody;
+      if (formData.apiType === "GraphQL") {
+        requestBody = JSON.stringify({
+          query: formData.graphQLQuery,
+          variables: JSON.parse(formData.graphQLVariables || "{}"),
+        });
+      }
+
+      const testRequest = {
+        api_type: formData.apiType,
+        url: formData.apiUrl,
+        method: formData.httpMethod,
+        headers: headersObj,
+        params: queryParamsObj,
+        body: requestBody,
+        tests: formData.selectedTests,
+      };
+
+      const response = await fetch("http://localhost:8000/api/run-tests", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(testRequest),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to run tests");
+      }
+
+      const results = await response.json();
+      setTestResults(results);
+    } catch (err) {
+      console.error("Test error:", err);
+      setError(err.message);
+      if (err.message === "Not authenticated") {
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("user");
+        navigate("/");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Styles
-  const containerStyle = {
-    minHeight: '100vh',
-    backgroundColor: '#0b1120',
-    color: 'white'
-  };
-
-  const formContainerStyle = {
-    maxWidth: '800px',
-    margin: '20px auto',
-    backgroundColor: '#161b22',
-    padding: '20px',
-    borderRadius: '8px',
-    boxShadow: '0 4px 10px rgba(0, 0, 0, 0.3)'
-  };
-
-  const inputStyle = {
-    width: '100%',
-    padding: '10px',
-    marginTop: '8px',
-    borderRadius: '4px',
-    border: '1px solid #30363d',
-    backgroundColor: '#0d1117',
-    color: '#c9d1d9'
-  };
-
-  const buttonStyle = {
-    padding: '10px 20px',
-    borderRadius: '4px',
-    backgroundColor: '#007BFF',
-    color: 'white',
-    border: 'none',
-    cursor: 'pointer',
-    marginRight: '10px'
-  };
-
-  const methodButtonStyle = (method) => ({
-    ...buttonStyle,
-    backgroundColor: httpMethod === method ? '#238636' : '#333'
-  });
-
-  const removeButtonStyle = {
-    ...buttonStyle,
-    backgroundColor: '#ff4444'
+  const handleLogout = () => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("user");
+    navigate("/");
   };
 
   return (
-    <div style={containerStyle}>
-      <Navbar />
-      <div style={formContainerStyle}>
-        <h1 style={{ marginBottom: '20px', textAlign: 'center' }}>API Security Test</h1>
-        
+    <Container>
+      <FormContainer>
+        <h1 style={{ marginBottom: "20px", textAlign: "center" }}>
+          Welcome, {user?.username || "User"}
+        </h1>
+
         <form onSubmit={handleSubmit}>
           {/* API Type Selection */}
-          <div style={{ marginBottom: '20px' }}>
+          <FieldContainer>
             <label>API Type</label>
-            <select
-              value={apiType}
-              onChange={(e) => setApiType(e.target.value)}
-              style={inputStyle}
+            <StyledSelect
+              name="apiType"
+              value={formData.apiType}
+              onChange={handleChange}
             >
               <option value="REST">REST</option>
               <option value="SOAP">SOAP</option>
               <option value="GraphQL">GraphQL</option>
-            </select>
-          </div>
+            </StyledSelect>
+          </FieldContainer>
 
           {/* API URL */}
-          <div style={{ marginBottom: '20px' }}>
+          <FieldContainer>
             <label>API URL</label>
-            <input
+            <Input
               type="text"
-              value={apiUrl}
-              onChange={(e) => setApiUrl(e.target.value)}
+              name="apiUrl"
+              value={formData.apiUrl}
+              onChange={handleChange}
               placeholder={
-                apiType === 'GraphQL' 
-                  ? "https://api.example.com/graphql" 
+                formData.apiType === "GraphQL"
+                  ? "https://api.example.com/graphql"
                   : "https://api.example.com/endpoint"
               }
-              style={inputStyle}
               required
             />
-          </div>
+          </FieldContainer>
 
           {/* HTTP Method (hidden for GraphQL) */}
-          {apiType !== 'GraphQL' && (
-            <div style={{ marginBottom: '20px' }}>
+          {formData.apiType !== "GraphQL" && (
+            <FieldContainer>
               <label>HTTP Method</label>
-              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-                {['GET', 'POST', 'PUT', 'DELETE'].map((method) => (
-                  <button
-                    type="button"
+              <div style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
+                {["GET", "POST", "PUT", "DELETE", "PATCH"].map((method) => (
+                  <Button
                     key={method}
-                    onClick={() => setHttpMethod(method)}
-                    style={methodButtonStyle(method)}
+                    type="button"
+                    variant={formData.httpMethod === method ? "success" : ""}
+                    onClick={() =>
+                      setFormData((prev) => ({ ...prev, httpMethod: method }))
+                    }
                   >
                     {method}
-                  </button>
+                  </Button>
                 ))}
               </div>
-            </div>
+            </FieldContainer>
           )}
 
           {/* GraphQL Query Editor */}
-          {apiType === 'GraphQL' && (
+          {formData.apiType === "GraphQL" && (
             <>
-              <div style={{ marginBottom: '20px' }}>
+              <FieldContainer>
                 <label>GraphQL Query</label>
-                <textarea
-                  value={graphQLQuery}
-                  onChange={(e) => setGraphQLQuery(e.target.value)}
+                <TextArea
+                  name="graphQLQuery"
+                  value={formData.graphQLQuery}
+                  onChange={handleChange}
                   placeholder={`query {\n  getUser(id: "123") {\n    name\n    email\n  }\n}`}
-                  style={{ ...inputStyle, minHeight: '150px', fontFamily: 'monospace' }}
                   required
                 />
-              </div>
-              <div style={{ marginBottom: '20px' }}>
-                <label>Variables (JSON)</label>
-                <textarea
-                  value={graphQLVariables}
-                  onChange={(e) => setGraphQLVariables(e.target.value)}
+              </FieldContainer>
+              <FieldContainer>
+                <label>GraphQL Variables (JSON)</label>
+                <TextArea
+                  name="graphQLVariables"
+                  value={formData.graphQLVariables}
+                  onChange={handleChange}
                   placeholder={`{\n  "id": "123"\n}`}
-                  style={{ ...inputStyle, minHeight: '100px', fontFamily: 'monospace' }}
                 />
-              </div>
+              </FieldContainer>
             </>
           )}
 
           {/* Request Body for REST/SOAP */}
-          {(apiType !== 'GraphQL' && (httpMethod === 'POST' || httpMethod === 'PUT')) && (
-            <div style={{ marginBottom: '20px' }}>
+          {(formData.apiType !== "GraphQL" &&
+            (formData.httpMethod === "POST" ||
+              formData.httpMethod === "PUT" ||
+              formData.httpMethod === "PATCH")) && (
+            <FieldContainer>
               <label>Request Body</label>
-              <textarea
-                value={requestBody}
-                onChange={(e) => setRequestBody(e.target.value)}
+              <TextArea
+                name="requestBody"
+                value={formData.requestBody}
+                onChange={handleChange}
                 placeholder={
-                  apiType === 'SOAP' 
-                    ? '<soap:Envelope>\n  <soap:Body>\n    <!-- Your SOAP request -->\n  </soap:Body>\n</soap:Envelope>' 
+                  formData.apiType === "SOAP"
+                    ? '<soap:Envelope>\n  <soap:Body>\n    <!-- Your SOAP request -->\n  </soap:Body>\n</soap:Envelope>'
                     : '{\n  "key": "value"\n}'
                 }
-                style={{ ...inputStyle, minHeight: '150px', fontFamily: 'monospace' }}
               />
-            </div>
+            </FieldContainer>
           )}
 
           {/* Headers Section */}
-          <div style={{ marginBottom: '20px' }}>
+          <FieldContainer>
             <label>Headers</label>
-            {headers.map((header, index) => (
-              <div key={index} style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                <input
+            {formData.headers.map((header, index) => (
+              <FieldRow key={index}>
+                <Input
                   type="text"
                   value={header.name}
-                  onChange={(e) => handleHeaderChange(index, 'name', e.target.value)}
+                  onChange={(e) =>
+                    handleHeaderChange(index, "name", e.target.value)
+                  }
                   placeholder="Name"
-                  style={{ ...inputStyle, flex: 1 }}
+                  style={{ flex: 1 }}
                 />
-                <input
+                <Input
                   type="text"
                   value={header.value}
-                  onChange={(e) => handleHeaderChange(index, 'value', e.target.value)}
+                  onChange={(e) =>
+                    handleHeaderChange(index, "value", e.target.value)
+                  }
                   placeholder="Value"
-                  style={{ ...inputStyle, flex: 2 }}
+                  style={{ flex: 2 }}
                 />
-                <button
+                <RemoveButton
                   type="button"
                   onClick={() => handleRemoveHeader(index)}
-                  style={removeButtonStyle}
                 >
-                  Remove
-                </button>
-              </div>
+                  ×
+                </RemoveButton>
+              </FieldRow>
             ))}
-            <button
+            <Button
               type="button"
               onClick={handleAddHeader}
-              style={{ ...buttonStyle, marginTop: '10px' }}
+              style={{ marginTop: "10px" }}
             >
               Add Header
-            </button>
-          </div>
+            </Button>
+          </FieldContainer>
 
           {/* Query Parameters (hidden for GraphQL) */}
-          {apiType !== 'GraphQL' && (
-            <div style={{ marginBottom: '20px' }}>
+          {formData.apiType !== "GraphQL" && (
+            <FieldContainer>
               <label>Query Parameters</label>
-              {queryParams.map((param, index) => (
-                <div key={index} style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                  <input
+              {formData.queryParams.map((param, index) => (
+                <FieldRow key={index}>
+                  <Input
                     type="text"
                     value={param.name}
-                    onChange={(e) => handleQueryParamChange(index, 'name', e.target.value)}
+                    onChange={(e) =>
+                      handleQueryParamChange(index, "name", e.target.value)
+                    }
                     placeholder="Name"
-                    style={{ ...inputStyle, flex: 1 }}
+                    style={{ flex: 1 }}
                   />
-                  <input
+                  <Input
                     type="text"
                     value={param.value}
-                    onChange={(e) => handleQueryParamChange(index, 'value', e.target.value)}
+                    onChange={(e) =>
+                      handleQueryParamChange(index, "value", e.target.value)
+                    }
                     placeholder="Value"
-                    style={{ ...inputStyle, flex: 2 }}
+                    style={{ flex: 2 }}
                   />
-                  <button
+                  <RemoveButton
                     type="button"
                     onClick={() => handleRemoveQueryParam(index)}
-                    style={removeButtonStyle}
                   >
-                    Remove
-                  </button>
-                </div>
+                    ×
+                  </RemoveButton>
+                </FieldRow>
               ))}
-              <button
+              <Button
                 type="button"
                 onClick={handleAddQueryParam}
-                style={{ ...buttonStyle, marginTop: '10px' }}
+                style={{ marginTop: "10px" }}
               >
                 Add Parameter
-              </button>
-            </div>
+              </Button>
+            </FieldContainer>
           )}
 
           {/* Authentication */}
-          <div style={{ marginBottom: '20px' }}>
+          <FieldContainer>
             <label>Authentication</label>
-            <select
-              value={authMethod}
-              onChange={(e) => setAuthMethod(e.target.value)}
-              style={inputStyle}
+            <StyledSelect
+              name="authMethod"
+              value={formData.authMethod}
+              onChange={handleChange}
             >
               <option value="None">None</option>
-              <option value="API Key">API Key</option>
               <option value="Bearer Token">Bearer Token</option>
-              <option value="OAuth">OAuth</option>
-            </select>
-            {authMethod !== 'None' && (
-              <input
+              <option value="API Key">API Key</option>
+              <option value="Basic Auth">Basic Auth</option>
+            </StyledSelect>
+            {formData.authMethod !== "None" && (
+              <Input
                 type="text"
-                value={authToken}
-                onChange={(e) => setAuthToken(e.target.value)}
-                placeholder={`Enter ${authMethod}`}
-                style={inputStyle}
+                name="authToken"
+                value={formData.authToken}
+                onChange={handleChange}
+                placeholder={
+                  formData.authMethod === "Bearer Token"
+                    ? "Bearer token"
+                    : formData.authMethod === "API Key"
+                    ? "API key"
+                    : "Username:Password"
+                }
               />
             )}
-          </div>
+          </FieldContainer>
+
+          {/* Security Tests Selection */}
+          <FieldContainer>
+            <label>Security Tests</label>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "10px",
+                marginTop: "8px",
+              }}
+            >
+              {[
+                "sql",
+                "xss",
+                "ssrf",
+                "xxe",
+                "rate_limit",
+                "dos",
+                "csrf",
+                "jwt",
+              ].map((test) => (
+                <Button
+                  key={test}
+                  type="button"
+                  variant={formData.selectedTests.includes(test) ? "success" : ""}
+                  onClick={() => handleTestToggle(test)}
+                  style={{ padding: "5px 10px", fontSize: "12px" }}
+                >
+                  {test.toUpperCase()}
+                </Button>
+              ))}
+            </div>
+          </FieldContainer>
 
           {/* Submit Button */}
-          <button
+          <Button
             type="submit"
-            style={{
-              ...buttonStyle,
-              width: '100%',
-              padding: '12px 24px',
-              fontSize: '16px'
-            }}
+            disabled={loading}
+            style={{ width: "100%", padding: "12px", fontSize: "16px" }}
           >
-            Run Security Test
-          </button>
+            {loading ? "Running Tests..." : "Run Security Test"}
+          </Button>
         </form>
-      </div>
-    </div>
+
+        {error && (
+          <div style={{ color: "#f85149", marginTop: "20px" }}>
+            Error: {error}
+          </div>
+        )}
+
+        {testResults.length > 0 && (
+          <div style={{ marginTop: "20px" }}>
+            <h2>Test Results</h2>
+            {testResults.map((result, index) => (
+              <div
+                key={index}
+                style={{
+                  padding: "15px",
+                  backgroundColor: "#222",
+                  marginBottom: "10px",
+                  borderRadius: "4px",
+                }}
+              >
+                <h3
+                  style={{
+                    color: result.vulnerable ? "#f85149" : "#3fb950",
+                  }}
+                >
+                  {result.test_name} - {result.vulnerable ? "Vulnerable" : "Secure"}
+                </h3>
+                <p>
+                  <strong>Confidence:</strong> {result.confidence}
+                </p>
+                <p>
+                  <strong>Description:</strong> {result.description}
+                </p>
+                {result.payload && (
+                  <p>
+                    <strong>Payload:</strong> {result.payload}
+                  </p>
+                )}
+                <p>
+                  <strong>Recommendation:</strong> {result.recommendation}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </FormContainer>
+    </Container>
   );
 };
 

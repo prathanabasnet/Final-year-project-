@@ -1,17 +1,15 @@
-import React, { useState } from "react";
-import styled, { keyframes } from "styled-components"; // Fix: Import `keyframes` correctly
+import React, { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import styled, { keyframes } from "styled-components";
+import { loginUser } from "../api/auth";
 
-// Define the floating animation
+// Animation for the floating card effect
 const floatAnimation = keyframes`
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
 `;
 
-// Styled components
+// Styled components for the login page
 const Container = styled.div`
   display: flex;
   justify-content: center;
@@ -56,6 +54,10 @@ const Input = styled.input`
   background-color: #0d1117;
   color: #c9d1d9;
   font-size: 14px;
+  &:focus {
+    outline: none;
+    border-color: #58a6ff;
+  }
 `;
 
 const LoginButton = styled.button`
@@ -67,6 +69,14 @@ const LoginButton = styled.button`
   font-size: 14px;
   cursor: pointer;
   margin-bottom: 20px;
+  transition: background-color 0.2s;
+  &:hover {
+    background-color: #2ea043;
+  }
+  &:disabled {
+    background-color: #5a6e5e;
+    cursor: not-allowed;
+  }
 `;
 
 const Links = styled.div`
@@ -79,50 +89,98 @@ const Link = styled.a`
   color: #58a6ff;
   text-decoration: none;
   font-size: 12px;
+  &:hover {
+    text-decoration: underline;
+  }
 `;
 
 const ErrorText = styled.p`
-  color: red;
+  color: #f85149;
   margin-bottom: 20px;
   text-align: center;
+  font-size: 14px;
 `;
 
 const Login = () => {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [credentials, setCredentials] = useState({
+    username: "",
+    password: "",
+  });
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
+  const hasNavigated = useRef(false); // Track navigation to prevent loops
 
-  const handleLogin = async (e) => {
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setCredentials((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-
-    if (!username || !password) {
-      setError("Username and password are required.");
-      return;
-    }
+    setIsLoading(true);
 
     try {
-      const formData = new FormData();
-      formData.append("username", username);
-      formData.append("password", password);
+      if (!credentials.username || !credentials.password) {
+        throw new Error("Username and password are required");
+      }
 
-      const response = await fetch("http://127.0.0.1:8000/login", {
-        method: "POST",
-        body: formData,
+      console.log("Attempting login with credentials:", {
+        username: credentials.username,
+        password: credentials.password,
       });
 
-      const data = await response.json();
+      const result = await loginUser({
+        username: credentials.username,
+        password: credentials.password,
+      });
 
-      if (response.ok) {
-        localStorage.setItem("token", data.access_token);
-        alert("Login successful!");
-        window.location.href = "/dashboard";
-      } else {
-        setError(data.detail || "Invalid username or password");
+      console.log("Login result:", result);
+
+      if (!result.success) {
+        throw new Error(result.message || "Login failed");
+      }
+
+      console.log("Login successful, result:", result);
+      console.log("result.user:", result.user);
+
+      // Store the token and user in localStorage
+      localStorage.setItem("access_token", result.token);
+      localStorage.setItem("user", JSON.stringify(result.user));
+
+      console.log("Stored in localStorage:", {
+        access_token: localStorage.getItem("access_token"),
+        user: localStorage.getItem("user"),
+      });
+
+      // Navigate to /test-config
+      if (!hasNavigated.current) {
+        hasNavigated.current = true;
+        console.log("Navigating to /test-config...");
+        navigate("/test-config", { replace: true });
       }
     } catch (err) {
-      console.error("Error during login:", err);
-      setError("An error occurred. Please try again later.");
+      console.error("Login error in handleSubmit:", err);
+      if (err.message === "Failed to fetch") {
+        setError(
+          "Unable to connect to the server. Please ensure the backend server is running at http://localhost:8000 and try again."
+        );
+      } else if (err.message.includes("CORS")) {
+        setError(
+          "CORS error: The backend server is not allowing requests from this origin. Please check the backend CORS configuration."
+        );
+      } else {
+        setError(err.message || "Login failed. Please try again.");
+      }
+
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("user");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -130,36 +188,46 @@ const Login = () => {
     <Container>
       <Card>
         <Title>Log In to API Security Framework</Title>
-        <Form onSubmit={handleLogin}>
+        <Form onSubmit={handleSubmit}>
           <Label>
             Username
             <Input
               type="text"
+              name="username"
               placeholder="Username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={credentials.username}
+              onChange={handleChange}
+              autoComplete="username"
+              required
             />
           </Label>
           <Label>
             Password
             <Input
               type="password"
+              name="password"
               placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={credentials.password}
+              onChange={handleChange}
+              autoComplete="current-password"
+              required
             />
           </Label>
 
           {error && <ErrorText>{error}</ErrorText>}
 
-          <LoginButton type="submit">Login</LoginButton>
+          <LoginButton type="submit" disabled={isLoading}>
+            {isLoading ? "Logging in..." : "Login"}
+          </LoginButton>
+
           <Links>
-            <Link href="/forgot-password">Forgot your password?</Link>
-            <Link href="/signup">Don't have an account?</Link>
+            <Link href="/forgot-password">Forgot password?</Link>
+            <Link href="/signup">Create account</Link>
           </Links>
         </Form>
       </Card>
     </Container>
   );
 };
+
 export default Login;
